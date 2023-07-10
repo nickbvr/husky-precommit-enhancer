@@ -74,4 +74,4 @@ check_git_index
 run_command "Running build check" "yarn tsc" "Build failed"
 run_command "Running tests" "yarn test" "Tests failed"
 run_command "Running code formatting" "yarn prettier . --write" "Formatting failed"
-run_command "Running code linting" "yarn eslint . --fix"` "Linting failed"
+run_command "Running code linting" "yarn eslint . --fix" "Linting failed"
