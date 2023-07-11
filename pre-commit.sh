@@ -2,10 +2,14 @@ ERROR_COLOR='\033[1;31m'
 SUCCESS_COLOR='\033[0;32m'
 PROCESS_COLOR='\033[0;34m'
 DEFAULT_COLOR='\033[0m'
+RESET_LINE="\r\033[K"
+
+ANIMATION_SPEED=0.5
+GIT_INDEX_ERROR_MESSAGE="Git index is empty. There are no added files"
 
 cleanup() {
   if [[ -n "$animation_pid" ]]; then
-    kill "$animation_pid"
+    kill "$animation_pid" >/dev/null 2>&1
   fi
   echo ""
   exit 0
@@ -20,10 +24,10 @@ echo_with_dots() {
   while true; do
     for ((j=0; j<max_dots; j++)); do
       printf "${PROCESS_COLOR}.${DEFAULT_COLOR}"
-      sleep 0.5
+      sleep ${ANIMATION_SPEED}
     done
-    printf "\r\033[K${PROCESS_COLOR}${message}${DEFAULT_COLOR}"
-    sleep 0.5
+    printf "${RESET_LINE}${PROCESS_COLOR}${message}${DEFAULT_COLOR}"
+    sleep ${ANIMATION_SPEED}
     i=$((i+1))
   done
 }
@@ -32,38 +36,40 @@ echo_message() {
   message="$1"
   status="$2"
   if [ "$status" = "error" ]; then
-    printf "\r\033[K${ERROR_COLOR}${message}${DEFAULT_COLOR}\n"
+    printf "${RESET_LINE}${ERROR_COLOR}${message}${DEFAULT_COLOR}\n"
   else
-    printf "\r\033[K${SUCCESS_COLOR}${message} passed${DEFAULT_COLOR}\n"
+    printf "${RESET_LINE}${SUCCESS_COLOR}${message}${DEFAULT_COLOR}\n"
   fi
 }
 
 check_git_index() {
   if [ -z "$(git diff --cached --name-only)" ]; then
-    echo "${ERROR_COLOR}Error: Git index is empty. There are no added files${DEFAULT_COLOR}"
+    printf "${ERROR_COLOR}${GIT_INDEX_ERROR_MESSAGE}${DEFAULT_COLOR}\n"
     exit 1
   fi
 }
 
 run_command() {
-  message="$1"
-  command="$2 > /dev/null"
-  failure_message_text="$3"
+  command="$1"
+  process_message="$2"
+  success_message="$3"
+  failure_message="$4"
 
-  echo_with_dots "${message}" &
+  echo_with_dots "${process_message}" &
   animation_pid=$!
-  if eval "${command}"; then
+  if output=$(eval "${command}" 2>&1); then
     if [[ -n "$animation_pid" ]]; then
-     kill "$animation_pid"
+      kill "$animation_pid"
     fi
     disown
-    echo_message "${message}"
+    echo_message "${success_message}"
   else
     if [[ -n "$animation_pid" ]]; then
-     kill "$animation_pid"
+      kill "$animation_pid"
     fi
     disown
-    echo_message "${failure_message_text}" "error"
+    echo "${output}\n"
+    echo_message "${failure_message}" "error"
     exit 1
   fi
 }
@@ -71,7 +77,6 @@ run_command() {
 trap cleanup INT
 
 check_git_index
-run_command "Running build check" "yarn tsc" "Build failed"
-run_command "Running tests" "yarn test" "Tests failed"
-run_command "Running code formatting" "yarn prettier . --write" "Formatting failed"
-run_command "Running code linting" "yarn eslint . --fix" "Linting failed"
+run_command "yarn tsc" "Running build check" "Build passed" "Build failed"
+run_command "yarn test" "Running tests" "Tests are passed" "Tests failed"
+run_command "yarn lint-staged" "Running code linting and formatting" "Linting and formatting passed" "Linting and formatting failed"
